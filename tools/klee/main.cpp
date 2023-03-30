@@ -378,6 +378,10 @@ KleeHandler::KleeHandler(int argc, char **argv)
       if (mkdir(d.c_str(), 0775) == 0) {
         m_outputDirectory = d;
 
+        auto arrayDirectory = d;
+        llvm::sys::path::append(arrayDirectory, "arrays");
+        mkdir(arrayDirectory.c_str(), 0775);
+
         SmallString<128> klee_last(directory);
         llvm::sys::path::append(klee_last, "klee-last");
 

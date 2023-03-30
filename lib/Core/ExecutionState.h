@@ -190,6 +190,9 @@ public:
 
   /// @brief Constraints collected so far
   ConstraintSet constraints;
+  
+  ConstraintSet path_constraints;
+  ref<Expr> branch_constraint;
 
   /// Statistics and information
 
@@ -275,6 +278,8 @@ public:
 
   void addConstraint(ref<Expr> e);
   void addCexPreference(const ref<Expr> &cond);
+  
+  void setBranchConstraint(ref<Expr> e);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;

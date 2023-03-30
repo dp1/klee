@@ -98,6 +98,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     stackAllocator(state.stackAllocator),
     heapAllocator(state.heapAllocator),
     constraints(state.constraints),
+    path_constraints(state.path_constraints),
+    branch_constraint(state.branch_constraint),
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
     coveredLines(state.coveredLines),
@@ -375,6 +377,10 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
 void ExecutionState::addConstraint(ref<Expr> e) {
   ConstraintManager c(constraints);
   c.addConstraint(e);
+}
+
+void ExecutionState::setBranchConstraint(ref<Expr> e) {
+  branch_constraint = e;
 }
 
 void ExecutionState::addCexPreference(const ref<Expr> &cond) {

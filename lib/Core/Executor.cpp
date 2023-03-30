@@ -1201,6 +1201,29 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
+    // At this point, the two states still have the old constrain set.
+    klee::ConstantArrayFinder finder;
+    for(auto& e : trueState->constraints) {
+      finder.visit(e);
+    }
+    for(auto& a : finder.results) {
+      if(a->isConstantArray()) {
+        klee_warning("Found constant array %s (%d bytes)", a->name.c_str(), a->size);
+        std::ofstream out("klee-last/arrays/" + a->name, std::ios::binary);
+        assert(out.good());
+        for(int i = 0; i < a->size; i++) {
+          char ch = a->constantValues.at(i)->getZExtValue(8);
+          out.write(&ch, 1);
+        }
+      }
+    }
+    
+    trueState->path_constraints = ConstraintSet(trueState->constraints);
+    falseState->path_constraints = ConstraintSet(falseState->constraints);
+    
+    trueState->setBranchConstraint(condition);
+    falseState->setBranchConstraint(Expr::createIsZero(condition));
+    
     addConstraint(*trueState, condition);
     addConstraint(*falseState, Expr::createIsZero(condition));
 
@@ -4641,7 +4664,10 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
     llvm::raw_string_ostream info(Str);
     ExprSMTLIBPrinter printer;
     printer.setOutput(info);
-    Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
+    printer.setHumanReadable(true);
+    printer.setAbbreviationMode(ExprSMTLIBPrinter::AbbreviationMode::ABBR_NONE);
+    // Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
+    Query query(state.path_constraints, state.branch_constraint);
     printer.setQuery(query);
     printer.generateOutput();
     res = info.str();
