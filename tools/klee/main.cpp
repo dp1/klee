@@ -382,6 +382,10 @@ KleeHandler::KleeHandler(int argc, char **argv)
         llvm::sys::path::append(arrayDirectory, "arrays");
         mkdir(arrayDirectory.c_str(), 0775);
 
+        auto arraySizeDirectory = d;
+        llvm::sys::path::append(arraySizeDirectory, "array-sizes");
+        mkdir(arraySizeDirectory.c_str(), 0775);
+
         SmallString<128> klee_last(directory);
         llvm::sys::path::append(klee_last, "klee-last");
 

@@ -47,6 +47,14 @@ namespace klee {
   public:
     std::set<const Array *> results;
   };
+  
+  class ArrayFinder : public ExprVisitor {
+  protected:
+    ExprVisitor::Action visitRead(const ReadExpr &re);
+
+  public:
+    std::set<const Array *> results;
+  };
 }
 
 #endif /* KLEE_EXPRUTIL_H */

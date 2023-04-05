@@ -118,6 +118,20 @@ ExprVisitor::Action ConstantArrayFinder::visitRead(const ReadExpr &re) {
 
   return Action::doChildren();
 }
+
+ExprVisitor::Action ArrayFinder::visitRead(const ReadExpr &re) {
+  const UpdateList &ul = re.updates;
+
+  // FIXME should we memo better than what ExprVisitor is doing for us?
+  for (const auto *un = ul.head.get(); un; un = un->next.get()) {
+    visit(un->index);
+    visit(un->value);
+  }
+
+  results.insert(ul.root);
+
+  return Action::doChildren();
+}
 }
 
 template<typename InputIterator>
