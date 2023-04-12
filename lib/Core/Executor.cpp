@@ -4651,8 +4651,8 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
     llvm::raw_string_ostream info(Str);
     ExprSMTLIBPrinter printer;
     printer.setOutput(info);
-    printer.setHumanReadable(true);
-    printer.setAbbreviationMode(ExprSMTLIBPrinter::AbbreviationMode::ABBR_NONE);
+    printer.setHumanReadable(false);
+    printer.setAbbreviationMode(ExprSMTLIBPrinter::AbbreviationMode::ABBR_LET);
     // Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
     Query query(state.path_constraints, state.branch_constraint);
     printer.setQuery(query);

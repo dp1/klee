@@ -214,6 +214,9 @@ protected:
   /// Contains the arrays found during scans
   std::set<const Array *> usedArrays;
 
+  /// Offset of each array in the 'input' merged array
+  std::map<const Array *, int> arrayOffsets;
+
   /// Set of expressions seen during scan.
   std::set<ref<Expr> > seenExprs;
 
@@ -246,6 +249,9 @@ protected:
 
   // Scan all constraints and the query
   void scanAll();
+
+  // Build the arrayOffsets map
+  void buildArrayOffsets();
 
   // Print an initial SMTLIBv2 comment before anything else is printed
   void printNotice();
@@ -335,7 +341,7 @@ protected:
                                            ExprSMTLIBPrinter::SMTLIB_SORT s);
 
   /// Recursively prints updatesNodes
-  void printUpdatesAndArray(const UpdateNode *un, const Array *root);
+  int printUpdatesAndArray(const UpdateNode *un, const Array *root);
 
   /// This method does the translation between Expr classes and SMTLIBv2
   /// keywords

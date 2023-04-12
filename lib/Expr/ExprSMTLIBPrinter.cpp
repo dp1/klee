@@ -77,6 +77,7 @@ void ExprSMTLIBPrinter::setQuery(const Query &q) {
   query = &q;
   reset(); // clear the data structures
   scanAll();
+  buildArrayOffsets();
 }
 
 void ExprSMTLIBPrinter::reset() {
@@ -277,11 +278,16 @@ void ExprSMTLIBPrinter::printReadExpr(const ref<ReadExpr> &e) {
   printSeperator();
 
   // print array with updates recursively
-  printUpdatesAndArray(e->updates.head.get(), e->updates.root);
+  int offset = printUpdatesAndArray(e->updates.head.get(), e->updates.root);
 
   // print index
+  auto width = e->index.get()->getWidth();
+  auto index = e->index;
+  if(offset != 0) {
+    index = AddExpr::create(e->index, ConstantExpr::create(offset, width));
+  }
   printSeperator();
-  printExpression(e->index, SORT_BITVECTOR);
+  printExpression(index, SORT_BITVECTOR);
 
   p->popIndent();
   printSeperator();
@@ -473,7 +479,9 @@ const char *ExprSMTLIBPrinter::getSMTLIBKeyword(const ref<Expr> &e) {
   }
 }
 
-void ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
+// Returns the offset to apply to all operations on this array.
+// For constant arrays, the returned index is 0
+int ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
                                              const Array *root) {
   if (un != NULL) {
     *p << "(store ";
@@ -481,12 +489,20 @@ void ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
     printSeperator();
 
     // recurse to get the array or update that this store operations applies to
-    printUpdatesAndArray(un->next.get(), root);
+    int offset = printUpdatesAndArray(un->next.get(), root);
 
     printSeperator();
 
     // print index
-    printExpression(un->index, SORT_BITVECTOR);
+    // We are merging all the symbolic arrays in one, so add the offset
+    // if this is the case. Constant arrays can stay as they are, and are
+    // marked with an offset of 0
+    auto width = un->index.get()->getWidth();
+    auto index = un->index;
+    if(offset != 0) {
+      index = AddExpr::create(un->index, ConstantExpr::create(offset, width));
+    }
+    printExpression(index, SORT_BITVECTOR);
     printSeperator();
 
     // print value that is assigned to this index of the array
@@ -495,9 +511,17 @@ void ExprSMTLIBPrinter::printUpdatesAndArray(const UpdateNode *un,
     p->popIndent();
     printSeperator();
     *p << ")";
+    return offset;
   } else {
     // The base case of the recursion
-    *p << root->name;
+    // *p << root->name;
+    if(root->isConstantArray()) {
+      *p << root->name;
+      return 0;
+    } else {
+      *p << "input";
+      return arrayOffsets.at(root);
+    }
   }
 }
 
@@ -559,16 +583,38 @@ struct ArrayPtrsByName {
 
 }
 
+void ExprSMTLIBPrinter::buildArrayOffsets() {
+  std::vector<const Array *> sortedArrays(usedArrays.begin(), usedArrays.end());
+  std::sort(sortedArrays.begin(), sortedArrays.end(), ArrayPtrsByName());
+
+  int offset = 0;
+  for(auto p : sortedArrays) {
+    arrayOffsets[p] = offset;
+    offset += p->size;
+  }
+}
+
 void ExprSMTLIBPrinter::printArrayDeclarations() {
   // Assume scan() has been called
   if (humanReadable)
     *o << "; Array declarations\n";
+
+  // All symbolic arrays are merged into 'input'
+  if(usedArrays.size() > 0) {
+    *o << "(declare-fun input () (Array (_ BitVec 32) (_ BitVec 8) ) )\n";
+  }
 
   // Declare arrays in a deterministic order.
   std::vector<const Array *> sortedArrays(usedArrays.begin(), usedArrays.end());
   std::sort(sortedArrays.begin(), sortedArrays.end(), ArrayPtrsByName());
   for (std::vector<const Array *>::iterator it = sortedArrays.begin();
        it != sortedArrays.end(); it++) {
+
+    // Only keep constant arrays
+    if((*it)->isSymbolicArray()) {
+      continue;
+    }
+
     *o << "(declare-fun " << (*it)->name << " () "
                                             "(Array (_ BitVec "
        << (*it)->getDomain() << ") "
@@ -577,47 +623,47 @@ void ExprSMTLIBPrinter::printArrayDeclarations() {
   }
 
   // Set array values for constant values
-  if (haveConstantArray) {
-    if (humanReadable)
-      *o << "; Constant Array Definitions\n";
+  // if (haveConstantArray) {
+    // if (humanReadable)
+    //   *o << "; Constant Array Definitions\n";
 
-    const Array *array;
+    // const Array *array;
 
     // loop over found arrays
-    for (std::vector<const Array *>::iterator it = sortedArrays.begin();
-         it != sortedArrays.end(); it++) {
-      array = *it;
-      int byteIndex = 0;
-      if (array->isConstantArray()) {
-        /*loop over elements in the array and generate an assert statement
-          for each one
-         */
-        for (std::vector<ref<ConstantExpr> >::const_iterator
-                 ce = array->constantValues.begin();
-             ce != array->constantValues.end(); ce++, byteIndex++) {
-          *p << "(assert (";
-          p->pushIndent();
-          *p << "= ";
-          p->pushIndent();
-          printSeperator();
+    // for (std::vector<const Array *>::iterator it = sortedArrays.begin();
+    //      it != sortedArrays.end(); it++) {
+    //   array = *it;
+    //   int byteIndex = 0;
+    //   if (array->isConstantArray()) {
+    //     /*loop over elements in the array and generate an assert statement
+    //       for each one
+    //      */
+    //     for (std::vector<ref<ConstantExpr> >::const_iterator
+    //              ce = array->constantValues.begin();
+    //          ce != array->constantValues.end(); ce++, byteIndex++) {
+    //       *p << "(assert (";
+    //       p->pushIndent();
+    //       *p << "= ";
+    //       p->pushIndent();
+    //       printSeperator();
 
-          *p << "(select " << array->name << " (_ bv" << byteIndex << " "
-             << array->getDomain() << ") )";
-          printSeperator();
-          printConstant((*ce));
+    //       *p << "(select " << array->name << " (_ bv" << byteIndex << " "
+    //          << array->getDomain() << ") )";
+    //       printSeperator();
+    //       printConstant((*ce));
 
-          p->popIndent();
-          printSeperator();
-          *p << ")";
-          p->popIndent();
-          printSeperator();
-          *p << ")";
+    //       p->popIndent();
+    //       printSeperator();
+    //       *p << ")";
+    //       p->popIndent();
+    //       printSeperator();
+    //       *p << ")";
 
-          p->breakLineI();
-        }
-      }
-    }
-  }
+    //       p->breakLineI();
+    //     }
+    //   }
+    // }
+  // }
 }
 
 void ExprSMTLIBPrinter::printHumanReadableQuery() {
@@ -649,9 +695,9 @@ void ExprSMTLIBPrinter::printMachineReadableQuery() {
 
 
 void ExprSMTLIBPrinter::printQueryInSingleAssert() {
-  // We negate the Query Expr because in KLEE queries are solved
-  // in terms of validity, but SMT-LIB works in terms of satisfiability
-  ref<Expr> queryAssert = Expr::createIsZero(query->expr);
+  // Always true
+  auto zero = ConstantExpr::create(0, Expr::Bool);
+  ref<Expr> queryAssert = EqExpr::alloc(zero, zero);
 
   // Print constraints inside the main query to reuse the Expr bindings
   for (std::vector<ref<Expr> >::const_iterator i = query->constraints.begin(),
@@ -659,6 +705,11 @@ void ExprSMTLIBPrinter::printQueryInSingleAssert() {
        i != e; ++i) {
     queryAssert = AndExpr::create(queryAssert, *i);
   }
+
+  // Put the query last so we can recover it at the end
+  // We negate the Query Expr because in KLEE queries are solved
+  // in terms of validity, but SMT-LIB works in terms of satisfiability
+  queryAssert = AndExpr::create(queryAssert, Expr::createIsZero(query->expr));
 
   // print just a single (assert ...) containing entire query
   printAssert(queryAssert);
