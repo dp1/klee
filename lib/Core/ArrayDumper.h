@@ -12,6 +12,8 @@ namespace klee {
     static std::map<std::string, std::vector<char>> constant_arrays;
     static std::map<std::string, unsigned int> array_lengths;
 
+    static void updateSize(const klee::Array*);
+
   public:
     static void dumpArrays(const klee::ConstraintSet&);
   };
