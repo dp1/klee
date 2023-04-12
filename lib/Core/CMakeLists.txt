@@ -8,6 +8,7 @@
 #===------------------------------------------------------------------------===#
 add_library(kleeCore
   AddressSpace.cpp
+  ArrayDumper.cpp
   MergeHandler.cpp
   CallPathManager.cpp
   Context.cpp

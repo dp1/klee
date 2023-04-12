@@ -10,6 +10,7 @@
 #include "Executor.h"
 
 #include "AddressSpace.h"
+#include "ArrayDumper.h"
 #include "Context.h"
 #include "CoreStats.h"
 #include "ExecutionState.h"
@@ -1202,25 +1203,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     }
 
     // At this point, the two states still have the old constrain set.
-    klee::ArrayFinder finder;
-    for(auto& e : trueState->constraints) {
-      finder.visit(e);
-    }
-    for(auto& a : finder.results) {
-      klee_warning("Found array %s (%d bytes)", a->name.c_str(), a->size);
-      if(a->isConstantArray()) {
-        std::ofstream out("klee-last/arrays/" + a->name, std::ios::binary);
-        assert(out.good());
-        for(int i = 0; i < a->size; i++) {
-          char ch = a->constantValues.at(i)->getZExtValue(8);
-          out.write(&ch, 1);
-        }
-      } else {
-        std::ofstream out("klee-last/array-sizes/" + a->name);
-        assert(out.good());
-        out << a->size << std::endl;
-      }
-    }
+    ArrayDumper::dumpArrays(trueState->constraints);
     
     trueState->path_constraints = ConstraintSet(trueState->constraints);
     falseState->path_constraints = ConstraintSet(falseState->constraints);
