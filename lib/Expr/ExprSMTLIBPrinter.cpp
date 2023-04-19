@@ -610,16 +610,19 @@ void ExprSMTLIBPrinter::printArrayDeclarations() {
   for (std::vector<const Array *>::iterator it = sortedArrays.begin();
        it != sortedArrays.end(); it++) {
 
-    // Only keep constant arrays
+    // Comment out symbolic array declarations (but keep them to know the order)
     if((*it)->isSymbolicArray()) {
-      continue;
+      *o << "; ";
     }
 
     *o << "(declare-fun " << (*it)->name << " () "
                                             "(Array (_ BitVec "
        << (*it)->getDomain() << ") "
-                                "(_ BitVec " << (*it)->getRange() << ") ) )"
-       << "\n";
+                                "(_ BitVec " << (*it)->getRange() << ") ) )";
+
+    // Log the array sizes
+    *o << " ; Array size: " << (*it)->size;
+    *o << '\n';
   }
 
   // Set array values for constant values
@@ -706,10 +709,12 @@ void ExprSMTLIBPrinter::printQueryInSingleAssert() {
     queryAssert = AndExpr::create(queryAssert, *i);
   }
 
-  // Put the query last so we can recover it at the end
   // We negate the Query Expr because in KLEE queries are solved
   // in terms of validity, but SMT-LIB works in terms of satisfiability
-  queryAssert = AndExpr::create(queryAssert, Expr::createIsZero(query->expr));
+  // Put the query last so we can recover it at the end, and
+  // use alloc instead of create to make sure the And is created even
+  // if technically useless.
+  queryAssert = AndExpr::alloc(queryAssert, Expr::createIsZero(query->expr));
 
   // print just a single (assert ...) containing entire query
   printAssert(queryAssert);
