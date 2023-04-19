@@ -10,11 +10,13 @@ using namespace klee;
 std::map<std::string, std::vector<char>> ArrayDumper::constant_arrays;
 std::map<std::string, unsigned int> ArrayDumper::array_lengths;
 
-void ArrayDumper::dumpArrays(const klee::ConstraintSet& constraints) {
+void ArrayDumper::dumpArrays(const klee::Query& query) {
   klee::ArrayFinder finder;
-  for(auto& e : constraints) {
+  for(auto& e : query.constraints) {
     finder.visit(e);
   }
+  finder.visit(query.expr);
+
   for(auto& a : finder.results) {
     // Not a new array, do some sanity checks
     if(array_lengths.find(a->name) != array_lengths.end()) {

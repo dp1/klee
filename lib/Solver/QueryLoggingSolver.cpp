@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 #include "QueryLoggingSolver.h"
 
+#include "ArrayDumper.h"
+
 #include "klee/Config/config.h"
 #include "klee/Support/OptionCategories.h"
 #include "klee/Statistics/Statistics.h"
@@ -78,6 +80,7 @@ void QueryLoggingSolver::startQuery(const Query &query, const char *typeName,
             << "Instructions: " << instructions << "\n";
 
   printQuery(query, falseQuery, objects);
+  ArrayDumper::dumpArrays(query);
 
   if (DumpPartialQueryiesEarly) {
     flushBufferConditionally(true);

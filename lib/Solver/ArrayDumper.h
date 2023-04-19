@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "klee/Expr/Constraints.h"
+#include "klee/Solver/Solver.h"
 
 namespace klee {
   class ArrayDumper {
@@ -15,7 +16,7 @@ namespace klee {
     static void updateSize(const klee::Array*);
 
   public:
-    static void dumpArrays(const klee::ConstraintSet&);
+    static void dumpArrays(const klee::Query&);
   };
 }
 

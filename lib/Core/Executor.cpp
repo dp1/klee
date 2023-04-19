@@ -10,7 +10,6 @@
 #include "Executor.h"
 
 #include "AddressSpace.h"
-#include "ArrayDumper.h"
 #include "Context.h"
 #include "CoreStats.h"
 #include "ExecutionState.h"
@@ -1202,15 +1201,6 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
-    // At this point, the two states still have the old constrain set.
-    ArrayDumper::dumpArrays(trueState->constraints);
-    
-    trueState->path_constraints = ConstraintSet(trueState->constraints);
-    falseState->path_constraints = ConstraintSet(falseState->constraints);
-    
-    trueState->setBranchConstraint(condition);
-    falseState->setBranchConstraint(Expr::createIsZero(condition));
-    
     addConstraint(*trueState, condition);
     addConstraint(*falseState, Expr::createIsZero(condition));
 
