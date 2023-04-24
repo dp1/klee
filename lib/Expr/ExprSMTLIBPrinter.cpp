@@ -589,8 +589,10 @@ void ExprSMTLIBPrinter::buildArrayOffsets() {
 
   int offset = 0;
   for(auto p : sortedArrays) {
-    arrayOffsets[p] = offset;
-    offset += p->size;
+    if(p->isSymbolicArray()) {
+      arrayOffsets[p] = offset;
+      offset += p->size;
+    }
   }
 }
 
