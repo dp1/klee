@@ -572,8 +572,12 @@ void ExprSMTLIBPrinter::printArrayDeclarations() {
     *o << "(declare-fun " << (*it)->name << " () "
                                             "(Array (_ BitVec "
        << (*it)->getDomain() << ") "
-                                "(_ BitVec " << (*it)->getRange() << ") ) )"
-       << "\n";
+                                "(_ BitVec " << (*it)->getRange() << ") ) )";
+
+    // Log the array type and size
+    *o << " ; Array type: " << ((*it)->isConstantArray() ? "constant" : "symbolic");
+    *o << " ; Array size: " << (*it)->size;
+    *o << '\n';
   }
 
   // Set array values for constant values
@@ -649,9 +653,9 @@ void ExprSMTLIBPrinter::printMachineReadableQuery() {
 
 
 void ExprSMTLIBPrinter::printQueryInSingleAssert() {
-  // We negate the Query Expr because in KLEE queries are solved
-  // in terms of validity, but SMT-LIB works in terms of satisfiability
-  ref<Expr> queryAssert = Expr::createIsZero(query->expr);
+  // Always true
+  auto zero = ConstantExpr::create(0, Expr::Bool);
+  ref<Expr> queryAssert = EqExpr::alloc(zero, zero);
 
   // Print constraints inside the main query to reuse the Expr bindings
   for (std::vector<ref<Expr> >::const_iterator i = query->constraints.begin(),
@@ -659,6 +663,14 @@ void ExprSMTLIBPrinter::printQueryInSingleAssert() {
        i != e; ++i) {
     queryAssert = AndExpr::create(queryAssert, *i);
   }
+
+  // Put the query in the top level And so we can recover it afterwards.
+  // Use alloc instead of create to make sure the And is created even
+  // if technically useless, otherwise separating the query from the constraints
+  // could become ambiguous.
+  // We negate the Query Expr because in KLEE queries are solved
+  // in terms of validity, but SMT-LIB works in terms of satisfiability
+  queryAssert = AndExpr::alloc(Expr::createIsZero(query->expr), queryAssert);
 
   // print just a single (assert ...) containing entire query
   printAssert(queryAssert);
