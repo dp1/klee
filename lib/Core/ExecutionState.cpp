@@ -43,6 +43,7 @@ cl::opt<bool> DebugLogStateMerge(
 /***/
 
 std::uint32_t ExecutionState::nextID = 1;
+std::uint32_t ExecutionState::nextTreeNodeID = 1;
 
 /***/
 
@@ -74,6 +75,7 @@ ExecutionState::ExecutionState(KFunction *kf, MemoryManager *mm)
     : pc(kf->instructions), prevPC(pc) {
   pushFrame(nullptr, kf);
   setID();
+  setTreeNodeID();
   if (mm->stackFactory && mm->heapFactory) {
     stackAllocator = mm->stackFactory.makeAllocator();
     heapAllocator = mm->heapFactory.makeAllocator();

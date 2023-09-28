@@ -881,6 +881,8 @@ bool Executor::branchingPermitted(const ExecutionState &state) const {
   return true;
 }
 
+std::uint32_t g_currentStateTreeNodeID = 0;
+
 void Executor::branch(ExecutionState &state,
                       const std::vector<ref<Expr>> &conditions,
                       std::vector<ExecutionState *> &result,
@@ -888,6 +890,8 @@ void Executor::branch(ExecutionState &state,
   TimerStatIncrementer timer(stats::forkTime);
   unsigned N = conditions.size();
   assert(N);
+
+  assert(false && "Executor::branch called");
 
   if (!branchingPermitted(state)) {
     unsigned next = theRNG.getInt32() % N;
@@ -932,9 +936,11 @@ void Executor::branch(ExecutionState &state,
       unsigned i;
       for (i=0; i<N; ++i) {
         ref<ConstantExpr> res;
+        g_currentStateTreeNodeID = 1234500;
         bool success = solver->getValue(
             state.constraints, siit->assignment.evaluate(conditions[i]), res,
             state.queryMetaData);
+        g_currentStateTreeNodeID = 0;
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
         if (res->isTrue())
@@ -1005,8 +1011,10 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
   if (reached_max_fork_limit || reached_max_cp_fork_limit ||
       reached_max_solver_limit || reached_max_cp_solver_limit) {
     ref<klee::ConstantExpr> value;
+    g_currentStateTreeNodeID = 1234501;
     bool success = solver->getValue(current.constraints, condition, value,
                                     current.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     assert(success && "FIXME: Unhandled solver failure");
     (void)success;
 
@@ -1029,9 +1037,13 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
 
+  klee_message("Forking state %d (tree node %d, parent %d)", current.id, current.treeNodeID, current.treeParentID);
+  assert(current.treeNodeID != 0 && "Trying to fork ExecutionState with no tree ID");
+
   if (!isSeeding)
     condition = maxStaticPctChecks(current, condition);
 
+  g_currentStateTreeNodeID = current.treeNodeID;
   time::Span timeout = coreSolverTimeout;
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
@@ -1039,6 +1051,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
   bool success = solver->evaluate(current.constraints, condition, res,
                                   current.queryMetaData);
   solver->setTimeout(time::Span());
+  g_currentStateTreeNodeID = 0;
+
+
   if (!success) {
     current.pc = current.prevPC;
     terminateStateOnSolverError(current, "Query timed out (fork).");
@@ -1092,9 +1107,11 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       ref<ConstantExpr> res;
+      g_currentStateTreeNodeID = 1234502;
       bool success = solver->getValue(current.constraints,
                                       siit->assignment.evaluate(condition), res,
                                       current.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res->isTrue()) {
@@ -1128,6 +1145,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
+    current.setTreeParentID(current.treeNodeID);
+    current.setTreeNodeID();
+
     return StatePair(&current, nullptr);
   } else if (res==Solver::False) {
     if (!isInternal) {
@@ -1135,6 +1155,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
         current.pathOS << "0";
       }
     }
+
+    current.setTreeParentID(current.treeNodeID);
+    current.setTreeNodeID();
 
     return StatePair(nullptr, &current);
   } else {
@@ -1154,9 +1177,11 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       for (std::vector<SeedInfo>::iterator siit = seeds.begin(), 
              siie = seeds.end(); siit != siie; ++siit) {
         ref<ConstantExpr> res;
+        g_currentStateTreeNodeID = 1234503;
         bool success = solver->getValue(current.constraints,
                                         siit->assignment.evaluate(condition),
                                         res, current.queryMetaData);
+        g_currentStateTreeNodeID = 0;
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
         if (res->isTrue()) {
@@ -1211,6 +1236,12 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       return StatePair(nullptr, nullptr);
     }
 
+    auto treeParent = current.getTreeNodeID();
+    trueState->setTreeNodeID();
+    trueState->setTreeParentID(treeParent);
+    falseState->setTreeNodeID();
+    falseState->setTreeParentID(treeParent);
+
     return StatePair(trueState, falseState);
   }
 }
@@ -1230,9 +1261,11 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       bool res;
+      g_currentStateTreeNodeID = 1234504;
       bool success = solver->mustBeFalse(state.constraints,
                                          siit->assignment.evaluate(condition),
                                          res, state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
@@ -1288,6 +1321,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     bool isTrue = false;
     e = optimizer.optimizeExpr(e, true);
     solver->setTimeout(coreSolverTimeout);
+    g_currentStateTreeNodeID = 1234505;
     if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
       ref<Expr> cond = EqExpr::create(e, value);
       cond = optimizer.optimizeExpr(cond, false);
@@ -1296,6 +1330,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
           isTrue)
         result = value;
     }
+    g_currentStateTreeNodeID = 0;
     solver->setTimeout(time::Span());
   }
   
@@ -1314,8 +1349,10 @@ Executor::toConstant(ExecutionState &state,
     return CE;
 
   ref<ConstantExpr> value;
+  g_currentStateTreeNodeID = 1234506;
   bool success =
       solver->getValue(state.constraints, e, value, state.queryMetaData);
+  g_currentStateTreeNodeID = 0;
   assert(success && "FIXME: Unhandled solver failure");
   (void) success;
 
@@ -1344,8 +1381,10 @@ void Executor::executeGetValue(ExecutionState &state,
   if (it==seedMap.end() || isa<ConstantExpr>(e)) {
     ref<ConstantExpr> value;
     e = optimizer.optimizeExpr(e, true);
+    g_currentStateTreeNodeID = 1234507;
     bool success =
         solver->getValue(state.constraints, e, value, state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
     bindLocal(target, state, value);
@@ -1356,8 +1395,10 @@ void Executor::executeGetValue(ExecutionState &state,
       ref<Expr> cond = siit->assignment.evaluate(e);
       cond = optimizer.optimizeExpr(cond, true);
       ref<ConstantExpr> value;
+      g_currentStateTreeNodeID = 1234508;
       bool success =
           solver->getValue(state.constraints, cond, value, state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       values.insert(value);
@@ -2256,8 +2297,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
       // check feasibility
       bool result;
+      g_currentStateTreeNodeID = 1234509;
       bool success __attribute__((unused)) =
           solver->mayBeTrue(state.constraints, e, result, state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       if (result) {
         targets.push_back(d);
@@ -2266,8 +2309,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     // check errorCase feasibility
     bool result;
+    g_currentStateTreeNodeID = 1234510;
     bool success __attribute__((unused)) = solver->mayBeTrue(
         state.constraints, errorCase, result, state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     assert(success && "FIXME: Unhandled solver failure");
     if (result) {
       expressions.push_back(errorCase);
@@ -2346,8 +2391,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         // Check if control flow could take this case
         bool result;
         match = optimizer.optimizeExpr(match, false);
+        g_currentStateTreeNodeID = 1234511;
         bool success = solver->mayBeTrue(state.constraints, match, result,
                                          state.queryMetaData);
+        g_currentStateTreeNodeID = 0;
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
         if (result) {
@@ -2375,8 +2422,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // Check if control could take the default case
       defaultValue = optimizer.optimizeExpr(defaultValue, false);
       bool res;
+      g_currentStateTreeNodeID = 1234512;
       bool success = solver->mayBeTrue(state.constraints, defaultValue, res,
                                        state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
@@ -2496,8 +2545,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       do {
         v = optimizer.optimizeExpr(v, true);
         ref<ConstantExpr> value;
+        g_currentStateTreeNodeID = 1234513;
         bool success =
             solver->getValue(free->constraints, v, value, free->queryMetaData);
+        g_currentStateTreeNodeID = 0;
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
         StatePair res = fork(*free, EqExpr::create(v, value), true, BranchType::Call);
@@ -3589,14 +3640,18 @@ std::string Executor::getAddressInfo(ExecutionState &state,
     example = CE->getZExtValue();
   } else {
     ref<ConstantExpr> value;
+    g_currentStateTreeNodeID = 1234514;
     bool success = solver->getValue(state.constraints, address, value,
                                     state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
     example = value->getZExtValue();
     info << "\texample: " << example << "\n";
+    g_currentStateTreeNodeID = 1234515;
     std::pair<ref<Expr>, ref<Expr>> res =
         solver->getRange(state.constraints, address, state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     info << "\trange: [" << res.first << ", " << res.second <<"]\n";
   }
   
@@ -3886,8 +3941,10 @@ void Executor::callExternalFunction(ExecutionState &state,
     if (ExternalCalls == ExternalCallPolicy::All) { // don't bother checking uniqueness
       *ai = optimizer.optimizeExpr(*ai, true);
       ref<ConstantExpr> ce;
+      g_currentStateTreeNodeID = 1234516;
       bool success =
           solver->getValue(state.constraints, *ai, ce, state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       ce->toMemory(&args[wordIndex]);
@@ -4120,8 +4177,10 @@ void Executor::executeAlloc(ExecutionState &state,
     size = optimizer.optimizeExpr(size, true);
 
     ref<ConstantExpr> example;
+    g_currentStateTreeNodeID = 1234517;
     bool success =
         solver->getValue(state.constraints, size, example, state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
     
@@ -4130,9 +4189,11 @@ void Executor::executeAlloc(ExecutionState &state,
     while (example->Ugt(ConstantExpr::alloc(128, W))->isTrue()) {
       ref<ConstantExpr> tmp = example->LShr(ConstantExpr::alloc(1, W));
       bool res;
+      g_currentStateTreeNodeID = 1234518;
       bool success =
           solver->mayBeTrue(state.constraints, EqExpr::create(tmp, size), res,
                             state.queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");      
       (void) success;
       if (!res)
@@ -4146,14 +4207,18 @@ void Executor::executeAlloc(ExecutionState &state,
     if (fixedSize.second) { 
       // Check for exactly two values
       ref<ConstantExpr> tmp;
+      g_currentStateTreeNodeID = 1234520;
       bool success = solver->getValue(fixedSize.second->constraints, size, tmp,
                                       fixedSize.second->queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");      
       (void) success;
       bool res;
+      g_currentStateTreeNodeID = 1234521;
       success = solver->mustBeTrue(fixedSize.second->constraints,
                                    EqExpr::create(tmp, size), res,
                                    fixedSize.second->queryMetaData);
+      g_currentStateTreeNodeID = 0;
       assert(success && "FIXME: Unhandled solver failure");      
       (void) success;
       if (res) {
@@ -4294,10 +4359,12 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   ObjectPair op;
   bool success;
   solver->setTimeout(coreSolverTimeout);
+  g_currentStateTreeNodeID = 1234525;
   if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
     address = toConstant(state, address, "resolveOne failure");
     success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
   }
+  g_currentStateTreeNodeID = 0;
   solver->setTimeout(time::Span());
 
   if (success) {
@@ -4313,8 +4380,10 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     bool inBounds;
     solver->setTimeout(coreSolverTimeout);
+    g_currentStateTreeNodeID = 1234526;
     bool success = solver->mustBeTrue(state.constraints, check, inBounds,
                                       state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     solver->setTimeout(time::Span());
     if (!success) {
       state.pc = state.prevPC;
@@ -4351,8 +4420,10 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   address = optimizer.optimizeExpr(address, true);
   ResolutionList rl;  
   solver->setTimeout(coreSolverTimeout);
+  g_currentStateTreeNodeID = 1234527;
   bool incomplete = state.addressSpace.resolve(state, solver, address, rl,
                                                0, coreSolverTimeout);
+  g_currentStateTreeNodeID = 0;
   solver->setTimeout(time::Span());
   
   // XXX there is some query wasteage here. who cares?
@@ -4672,9 +4743,11 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   for (auto& pi: state.cexPreferences) {
     bool mustBeTrue;
     // Attempt to bound byte to constraints held in cexPreferences
+    g_currentStateTreeNodeID = 1234528;
     bool success =
       solver->mustBeTrue(extendedConstraints, Expr::createIsZero(pi),
         mustBeTrue, state.queryMetaData);
+    g_currentStateTreeNodeID = 0;
     // If it isn't possible to add the condition without making the entire list
     // UNSAT, then just continue to the next condition
     if (!success) break;
@@ -4688,8 +4761,10 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   std::vector<const Array*> objects;
   for (unsigned i = 0; i != state.symbolics.size(); ++i)
     objects.push_back(state.symbolics[i].second);
+  g_currentStateTreeNodeID = 1234529;
   bool success = solver->getInitialValues(extendedConstraints, objects, values,
                                           state.queryMetaData);
+  g_currentStateTreeNodeID = 0;
   solver->setTimeout(time::Span());
   if (!success) {
     klee_warning("unable to compute initial values (invalid constraints?)!");

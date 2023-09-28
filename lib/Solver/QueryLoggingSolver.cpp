@@ -29,6 +29,8 @@ llvm::cl::opt<bool> CreateCompressedQueryLog(
 #endif
 } // namespace
 
+std::uint32_t __attribute__((weak)) g_currentStateTreeNodeID = 0;
+
 QueryLoggingSolver::QueryLoggingSolver(Solver *_solver, std::string path,
                                        const std::string &commentSign,
                                        time::Span queryTimeToLog,
@@ -75,7 +77,8 @@ void QueryLoggingSolver::startQuery(const Query &query, const char *typeName,
 
   logBuffer << queryCommentSign << " Query " << queryCount++ << " -- "
             << "Type: " << typeName << ", "
-            << "Instructions: " << instructions << "\n";
+            << "Instructions: " << instructions << ", "
+            << "TreeNodeID: " << g_currentStateTreeNodeID << "\n";
 
   printQuery(query, falseQuery, objects);
 
