@@ -40,6 +40,11 @@ Solver *constructSolverChain(Solver *coreSolver,
                  baseSolverQuerySMT2LogPath.c_str());
   }
 
+  if (ConcretizeArrays) {
+    solver = createArrayConcretizationSolver(solver);
+    klee_message("Concretizing all array queries that reach the solver");
+  }
+
   if (UseAssignmentValidatingSolver)
     solver = createAssignmentValidatingSolver(solver);
 
