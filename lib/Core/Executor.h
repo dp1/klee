@@ -38,6 +38,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <fstream>
 
 struct KTest;
 
@@ -208,6 +209,10 @@ private:
 
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
+
+  std::ofstream state_dump_file;
+  std::set<uint64_t> dumped_states;
+  void dump_state(ExecutionState *state);
 
   /// Return the typeid corresponding to a certain `type_info`
   ref<ConstantExpr> getEhTypeidFor(ref<Expr> type_info);

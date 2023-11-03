@@ -41,6 +41,7 @@
 #include "klee/Module/InstructionInfoTable.h"
 #include "klee/Module/KCallable.h"
 #include "klee/Module/KInstruction.h"
+#include "klee/Module/KInstIterator.h"
 #include "klee/Module/KModule.h"
 #include "klee/Solver/Common.h"
 #include "klee/Solver/SolverCmdLine.h"
@@ -469,7 +470,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
-      ivcEnabled(false), debugLogBuffer(debugBufferString) {
+      ivcEnabled(false), debugLogBuffer(debugBufferString), state_dump_file("/tmp/state_dump.txt", std::ios::out) {
 
 
   const time::Span maxTime{MaxTime};
@@ -1022,12 +1023,23 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
   return condition;
 }
 
+void Executor::dump_state(ExecutionState *state) {
+  uint64_t id = (uint64_t{state->getTreeParentID()} << 32) | state->getTreeNodeID();
+  if(dumped_states.find(id) == dumped_states.end()) {
+    state_dump_file << id << ' ' << std::flush;
+    dumped_states.insert(id);
+  }
+}
+
 Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
                                    bool isInternal, BranchType reason) {
   Solver::Validity res;
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
+
+  klee_message("Forking state %d (tree node %d, parent %d)", current.id, current.treeNodeID, current.treeParentID);
+  // assert(current.treeNodeID != 0 && "Trying to fork ExecutionState with no tree ID");
 
   if (!isSeeding)
     condition = maxStaticPctChecks(current, condition);
@@ -1127,6 +1139,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
         current.pathOS << "1";
       }
     }
+    current.setTreeParentID(current.treeNodeID);
+    current.setTreeNodeID();
+    dump_state(&current);
 
     return StatePair(&current, nullptr);
   } else if (res==Solver::False) {
@@ -1135,6 +1150,10 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
         current.pathOS << "0";
       }
     }
+
+    current.setTreeParentID(current.treeNodeID);
+    current.setTreeNodeID();
+    dump_state(&current);
 
     return StatePair(nullptr, &current);
   } else {
@@ -1210,6 +1229,14 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       terminateStateEarly(*falseState, "max-depth exceeded.", StateTerminationType::MaxDepth);
       return StatePair(nullptr, nullptr);
     }
+
+    auto treeParent = current.getTreeNodeID();
+    trueState->setTreeNodeID();
+    trueState->setTreeParentID(treeParent);
+    falseState->setTreeNodeID();
+    falseState->setTreeParentID(treeParent);
+    dump_state(trueState);
+    dump_state(falseState);
 
     return StatePair(trueState, falseState);
   }
