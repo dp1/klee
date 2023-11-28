@@ -242,16 +242,13 @@ public:
   /// @brief the state id
   std::uint32_t id = 0;
 
-  /// @brief the global state tree node counter
-  static std::uint32_t nextTreeNodeID;
-
   /// @brief Id in the state tree. This is separate from the state id, since it needs to
   /// be updated on every edge, and not only if a new state is created.
   /// For example, if state 42 forks in two paths, one of them will still be state 42,
   /// with the opposing branch taking a new id. To track the state tree, we need the id
   /// to change for both output states, and also if a state only has one successor, so
   /// we need a separate id field.
-  std::uint32_t treeNodeID = 0;
+  // std::uint32_t treeNodeID = 0;
 
   /// @brief Id of the parent in the state tree. If the ID is zero, this node is the root
   /// of the tree, and no parent exists.
@@ -298,9 +295,7 @@ public:
   void setID() { id = nextID++; };
   static std::uint32_t getLastID() { return nextID - 1; };
 
-  auto getTreeNodeID() const { return treeNodeID; }
-  // void setTreeNodeID() { treeNodeID = nextTreeNodeID++; }
-  void setTreeNodeID();
+  std::uint32_t getTreeNodeID() const;
   auto getTreeParentID() const { return treeParentID; }
   void setTreeParentID(std::uint32_t parent) { treeParentID = parent; }
 };

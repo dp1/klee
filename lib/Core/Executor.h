@@ -211,7 +211,7 @@ private:
   std::vector<ref<Expr>> eh_typeids;
 
   std::ofstream state_dump_file;
-  std::set<uint64_t> dumped_states;
+  std::set<uint32_t> dumped_states;
   void dump_state(ExecutionState *state);
 
   /// Return the typeid corresponding to a certain `type_info`

@@ -124,6 +124,13 @@ cl::opt<std::string> MaxTime(
              "Set to 0s to disable (default=0s)"),
     cl::init("0s"),
     cl::cat(TerminationCat));
+
+
+cl::opt<std::string> StateDumpPath(
+    "state-dump-path",
+    cl::desc("Output file in which to dump the state tree nodes, as a series of <node> <parent> lines"),
+    cl::init("/tmp/state_dump.txt"),
+    cl::cat(DebugCat));
 } // namespace klee
 
 namespace {
@@ -470,7 +477,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
-      ivcEnabled(false), debugLogBuffer(debugBufferString), state_dump_file("/tmp/state_dump.txt", std::ios::out) {
+      ivcEnabled(false), debugLogBuffer(debugBufferString), state_dump_file(StateDumpPath.getValue(), std::ios::out) {
 
 
   const time::Span maxTime{MaxTime};
@@ -1024,9 +1031,9 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
 }
 
 void Executor::dump_state(ExecutionState *state) {
-  uint64_t id = (uint64_t{state->getTreeParentID()} << 32) | state->getTreeNodeID();
+  auto id = state->getTreeNodeID();
   if(dumped_states.find(id) == dumped_states.end()) {
-    state_dump_file << id << ' ' << std::flush;
+    state_dump_file << id << ' ' << state->getTreeParentID() << std::endl;
     dumped_states.insert(id);
   }
 }
@@ -1038,8 +1045,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
 
-  klee_message("Forking state %d (tree node %d, parent %d)", current.id, current.treeNodeID, current.treeParentID);
+  // klee_message("Forking state %d (tree node %d, parent %d)", current.id, current.treeNodeID, current.treeParentID);
   // assert(current.treeNodeID != 0 && "Trying to fork ExecutionState with no tree ID");
+  dump_state(&current);
 
   if (!isSeeding)
     condition = maxStaticPctChecks(current, condition);
@@ -1139,9 +1147,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
         current.pathOS << "1";
       }
     }
-    current.setTreeParentID(current.treeNodeID);
-    current.setTreeNodeID();
-    dump_state(&current);
+    current.setTreeParentID(current.getTreeNodeID());
 
     return StatePair(&current, nullptr);
   } else if (res==Solver::False) {
@@ -1151,9 +1157,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
-    current.setTreeParentID(current.treeNodeID);
-    current.setTreeNodeID();
-    dump_state(&current);
+    current.setTreeParentID(current.getTreeNodeID());
 
     return StatePair(nullptr, &current);
   } else {
@@ -1231,12 +1235,8 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     }
 
     auto treeParent = current.getTreeNodeID();
-    trueState->setTreeNodeID();
     trueState->setTreeParentID(treeParent);
-    falseState->setTreeNodeID();
     falseState->setTreeParentID(treeParent);
-    dump_state(trueState);
-    dump_state(falseState);
 
     return StatePair(trueState, falseState);
   }
