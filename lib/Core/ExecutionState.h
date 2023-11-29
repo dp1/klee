@@ -252,7 +252,8 @@ public:
 
   /// @brief Id of the parent in the state tree. If the ID is zero, this node is the root
   /// of the tree, and no parent exists.
-  std::uint32_t treeParentID = 0;
+  std::uint64_t treeParentPath = 0;
+  std::uint64_t treePath = 0;
 
   /// @brief Whether a new instruction was covered in this state
   bool coveredNew = false;
@@ -296,8 +297,10 @@ public:
   static std::uint32_t getLastID() { return nextID - 1; };
 
   std::uint32_t getTreeNodeID() const;
-  auto getTreeParentID() const { return treeParentID; }
-  void setTreeParentID(std::uint32_t parent) { treeParentID = parent; }
+  auto getTreeParentPath() const { return treeParentPath; }
+  void setTreeParentPath(std::uint64_t parent) { treeParentPath = parent; }
+  auto getTreePath() const { return treePath; }
+  void updateTreePath();
 };
 
 struct ExecutionStateIDCompare {

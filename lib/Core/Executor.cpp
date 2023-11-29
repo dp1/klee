@@ -1031,9 +1031,9 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
 }
 
 void Executor::dump_state(ExecutionState *state) {
-  auto id = state->getTreeNodeID();
+  auto id = state->getTreePath();
   if(dumped_states.find(id) == dumped_states.end()) {
-    state_dump_file << id << ' ' << state->getTreeParentID() << std::endl;
+    state_dump_file << id << ' ' << state->getTreeParentPath() << std::endl;
     dumped_states.insert(id);
   }
 }
@@ -1047,6 +1047,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
 
   // klee_message("Forking state %d (tree node %d, parent %d)", current.id, current.treeNodeID, current.treeParentID);
   // assert(current.treeNodeID != 0 && "Trying to fork ExecutionState with no tree ID");
+  current.updateTreePath();
   dump_state(&current);
 
   if (!isSeeding)
@@ -1147,7 +1148,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
         current.pathOS << "1";
       }
     }
-    current.setTreeParentID(current.getTreeNodeID());
+    current.setTreeParentPath(current.getTreePath());
 
     return StatePair(&current, nullptr);
   } else if (res==Solver::False) {
@@ -1157,7 +1158,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
-    current.setTreeParentID(current.getTreeNodeID());
+    current.setTreeParentPath(current.getTreePath());
 
     return StatePair(nullptr, &current);
   } else {
@@ -1234,9 +1235,9 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       return StatePair(nullptr, nullptr);
     }
 
-    auto treeParent = current.getTreeNodeID();
-    trueState->setTreeParentID(treeParent);
-    falseState->setTreeParentID(treeParent);
+    auto treeParent = current.getTreePath();
+    trueState->setTreeParentPath(treeParent);
+    falseState->setTreeParentPath(treeParent);
 
     return StatePair(trueState, falseState);
   }
