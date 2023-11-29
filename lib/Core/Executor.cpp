@@ -1033,7 +1033,7 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
 void Executor::dump_state(ExecutionState *state) {
   auto id = state->getTreePath();
   if(dumped_states.find(id) == dumped_states.end()) {
-    state_dump_file << id << ' ' << state->getTreeParentPath() << std::endl;
+    state_dump_file << id << ' ' << state->getTreeParentPath() << ' ' << state->getTreeNodeID() << std::endl;
     dumped_states.insert(id);
   }
 }
